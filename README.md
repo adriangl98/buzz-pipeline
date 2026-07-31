@@ -32,3 +32,16 @@ idea -> Griller -> Specer -> Ticketer -> Builder -> Reviewer -> done
 ## Setup
 
 See [IDENTITY-MAP.md](/home/adcgo1/vps-agent-lab/IDENTITY-MAP.md) for full agent identity mapping.
+
+## Status (2026-07-31)
+
+- [x] Agent SSH keys generated (7 keypairs)
+- [x] Deploy keys added to GitHub repo
+- [x] GitHub webhook configured
+- [x] Webhook relay deployed on VPS (nginx + Python FastAPI)
+- [x] Buzz channel integration verified
+- [ ] Worktree isolation (Sandcastle pattern)
+- [ ] Shared memory layer (agentmemory)
+- [ ] Multi-model support
+- [ ] Parallel execution
+- [ ] Project board
