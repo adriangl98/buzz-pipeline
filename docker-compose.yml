@@ -1,0 +1,27 @@
+version: "3.8"
+
+services:
+  openwa:
+    image: openwa/openwa:latest
+    container_name: openwa
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    volumes:
+      - openwa_data:/app/data
+    environment:
+      - NODE_ENV=production
+
+  gateway:
+    build: .
+    container_name: hermes-gateway
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - OPENWA_URL=http://openwa:3000
+    depends_on:
+      - openwa
+
+volumes:
+  openwa_data:

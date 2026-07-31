@@ -3,3 +3,14 @@
 *.pem
 id_ed25519
 credentials/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+.pytest_cache/
+*.egg-info/
+dist/
+
