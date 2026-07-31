@@ -45,3 +45,6 @@ See [IDENTITY-MAP.md](/home/adcgo1/vps-agent-lab/IDENTITY-MAP.md) for full agent
 - [ ] Multi-model support
 - [ ] Parallel execution
 - [ ] Project board
+## Tunneling method
+
+Webhook exposed via direct IP (178.104.222.55) with self-signed SSL cert and nginx reverse proxy. GitHub webhook configured with insecure_ssl: 1.
