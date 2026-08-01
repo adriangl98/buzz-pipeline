@@ -28,11 +28,16 @@ def create_app(
 
     @app.get("/health")
     async def health():
+        conv_count = sum(
+            store.get_conversation_count(phone)
+            for phone in store._by_phone
+        )
         return {
             "status": "healthy",
             "patients": store.count(),
             "faq_topics": len(faq.ANSWERS),
             "pending_escalations": escalation.pending_count,
+            "total_conversations": conv_count,
         }
 
     @app.post("/webhook")
@@ -47,7 +52,13 @@ def create_app(
         body = parsed["body"]
         name = parsed["notify_name"]
 
-        greeting = greeter.greet(phone, body)
+        # Record the conversation
+        store.add_conversation(phone, body)
+
+        # Greet with identity verification
+        verification = greeter.greet_with_verification(phone, body)
+        greeting = verification["greeting"]
+
         faq_answer = faq.ask(body)
 
         if faq_answer is not None:

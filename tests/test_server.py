@@ -8,7 +8,69 @@ from gateway.openwa_client import send_message
 
 
 class TestWebhookEndpoint:
-    """End-to-end: webhook → parse → echo → send."""
+    """End-to-end: webhook → verify → record → respond → send."""
+
+    @pytest.mark.asyncio
+    async def test_records_conversation_on_message(self):
+        """Each incoming message is recorded in PatientStore."""
+        from gateway.server import create_app
+        from memory.store import PatientStore
+
+        store = PatientStore()
+        app = create_app(store=store)
+        mock_send = AsyncMock(return_value=True)
+
+        with patch("gateway.server.send_message", mock_send):
+            async with AsyncClient(
+                transport=ASGITransport(app=app), base_url="http://test"
+            ) as client:
+                await client.post("/webhook", json={
+                    "event": "message",
+                    "data": {
+                        "from": "1234567890@c.us",
+                        "to": "x@c.us",
+                        "body": "Hi, what time do you open?",
+                        "type": "chat",
+                        "notifyName": "John Smith",
+                    },
+                })
+
+        assert store.get_conversation_count("1234567890@c.us") == 1
+        history = store.get_conversation_history("1234567890@c.us")
+        assert history[0]["message"] == "Hi, what time do you open?"
+        assert "timestamp" in history[0]
+
+    @pytest.mark.asyncio
+    async def test_known_name_different_phone_triggers_verification(self):
+        """When a known patient name messages from a new phone, verification triggers."""
+        from gateway.server import create_app
+        from memory.store import PatientStore
+        from datetime import date
+
+        store = PatientStore()
+        store.add("phone1@c.us", "María García", date(2026, 7, 15))
+        app = create_app(store=store)
+        mock_send = AsyncMock(return_value=True)
+
+        with patch("gateway.server.send_message", mock_send):
+            async with AsyncClient(
+                transport=ASGITransport(app=app), base_url="http://test"
+            ) as client:
+                await client.post("/webhook", json={
+                    "event": "message",
+                    "data": {
+                        "from": "phone2@c.us",
+                        "to": "x@c.us",
+                        "body": "Hola, soy María García",
+                        "type": "chat",
+                        "notifyName": "María García",
+                    },
+                })
+
+        mock_send.assert_called_once()
+        body = mock_send.call_args.kwargs["body"]
+        assert "María" in body
+        assert "different number" in body.lower() or "número diferente" in body.lower()
 
     @pytest.mark.asyncio
     async def test_english_message_flow(self):
