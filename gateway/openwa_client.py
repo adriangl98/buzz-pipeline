@@ -7,16 +7,7 @@ async def send_message(
     body: str,
     openwa_url: str = "http://localhost:3000",
 ) -> bool:
-    """Send a text message via OpenWA.
-
-    Args:
-        to: WhatsApp chat ID (e.g., '1234567890@c.us').
-        body: Message text to send.
-        openwa_url: Base URL of the OpenWA instance.
-
-    Returns:
-        True if sent successfully, False on any error.
-    """
+    """Send a text message via OpenWA."""
     try:
         async with httpx.AsyncClient() as client:
             response = await client.post(
