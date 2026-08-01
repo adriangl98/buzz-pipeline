@@ -1,5 +1,5 @@
 """Patient memory store — remembers patients by phone across conversations."""
-from datetime import date
+from datetime import datetime, date, timezone
 from typing import Optional
 
 
@@ -11,11 +11,13 @@ class PatientStore:
     - Lookup by phone
     - Link alternate phone numbers (identity verification)
     - Find by name (flags same-name-different-phone)
+    - Conversation tracking (count + history)
     """
 
     def __init__(self):
         self._by_phone: dict[str, dict] = {}
         self._aliases: dict[str, str] = {}  # new_phone -> canonical_phone
+        self._conversations: dict[str, list[dict]] = {}  # phone -> messages
 
     def add(self, phone: str, name: str, last_visit: date) -> dict:
         """Add a new patient record."""
@@ -70,6 +72,35 @@ class PatientStore:
     def count(self) -> int:
         """Return the total number of unique patients."""
         return len(self._by_phone)
+
+    # ── conversation tracking (Ticket 2) ─────────────────────────
+
+    def add_conversation(self, phone: str, message: str) -> None:
+        """Record a conversation message for a patient.
+
+        Resolves through aliases. Creates the conversation list
+        if the patient hasn't had one yet.
+        """
+        canonical = self._resolve_phone(phone)
+        if canonical not in self._conversations:
+            self._conversations[canonical] = []
+        self._conversations[canonical].append({
+            "message": message,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        })
+
+    def get_conversation_count(self, phone: str) -> int:
+        """Return the number of recorded conversations for a patient."""
+        canonical = self._resolve_phone(phone)
+        messages = self._conversations.get(canonical, [])
+        return len(messages)
+
+    def get_conversation_history(self, phone: str) -> list[dict]:
+        """Return the full conversation history for a patient."""
+        canonical = self._resolve_phone(phone)
+        return list(self._conversations.get(canonical, []))
+
+    # ── internal ──────────────────────────────────────────────────
 
     def _resolve_phone(self, phone: str) -> str:
         """Resolve alias chain to canonical phone number."""
