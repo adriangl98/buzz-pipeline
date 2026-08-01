@@ -12,7 +12,7 @@ class TestWebhookEndpoint:
 
     @pytest.mark.asyncio
     async def test_english_message_flow(self):
-        """POST English message → echo response sent via OpenWA."""
+        """POST English message → greeting + escalation sent via OpenWA."""
         mock_send = AsyncMock(return_value=True)
 
         with patch("gateway.server.send_message", mock_send):
@@ -36,15 +36,17 @@ class TestWebhookEndpoint:
         assert response.status_code == 200
         assert response.json() == {"status": "ok"}
 
-        mock_send.assert_called_once_with(
-            to="1234567890@c.us",
-            body="Received: Hi, any appointments today?",
-            openwa_url="http://localhost:3000",
-        )
+        # Unified gateway: new patient greeting + escalation (no FAQ match)
+        mock_send.assert_called_once()
+        call_args = mock_send.call_args
+        assert call_args.kwargs["to"] == "1234567890@c.us"
+        assert "Welcome to Laredo Dental" in call_args.kwargs["body"]
+        assert "sent your question" in call_args.kwargs["body"]
+        assert call_args.kwargs["openwa_url"] == "http://localhost:3000"
 
     @pytest.mark.asyncio
     async def test_spanish_message_flow(self):
-        """POST Spanish message → echo response sent via OpenWA."""
+        """POST Spanish message → Spanish greeting + escalation sent via OpenWA."""
         mock_send = AsyncMock(return_value=True)
 
         with patch("gateway.server.send_message", mock_send):
@@ -68,11 +70,13 @@ class TestWebhookEndpoint:
         assert response.status_code == 200
         assert response.json() == {"status": "ok"}
 
-        mock_send.assert_called_once_with(
-            to="521234567890@c.us",
-            body="Received: Hola, ¿tienen cita para mañana?",
-            openwa_url="http://localhost:3000",
-        )
+        # Unified gateway: Spanish new patient greeting + escalation (no FAQ match)
+        mock_send.assert_called_once()
+        call_args = mock_send.call_args
+        assert call_args.kwargs["to"] == "521234567890@c.us"
+        assert "Bienvenido a Laredo Dental" in call_args.kwargs["body"]
+        assert "sent your question" in call_args.kwargs["body"]
+        assert call_args.kwargs["openwa_url"] == "http://localhost:3000"
 
     @pytest.mark.asyncio
     async def test_rejects_non_message_events(self):
@@ -123,11 +127,15 @@ class TestHealthEndpoint:
 
     @pytest.mark.asyncio
     async def test_health_returns_ok(self):
-        """GET /health returns 200."""
+        """GET /health returns 200 with healthy status."""
         async with AsyncClient(
             transport=ASGITransport(app=app), base_url="http://test"
         ) as client:
             response = await client.get("/health")
 
         assert response.status_code == 200
-        assert response.json() == {"status": "healthy"}
+        data = response.json()
+        assert data["status"] == "healthy"
+        # Unified gateway includes extra fields — just verify they exist
+        assert "patients" in data
+        assert "faq_topics" in data
