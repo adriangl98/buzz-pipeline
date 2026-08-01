@@ -3,3 +3,5 @@
 *.pem
 id_ed25519
 credentials/
+venv/
+__pycache__/
