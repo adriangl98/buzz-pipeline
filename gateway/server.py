@@ -8,6 +8,7 @@ from gateway.openwa_client import send_message
 from memory.store import PatientStore
 from memory.greeter import PatientGreeter
 from faq.knowledge import FAQ
+from faq.manager import IntakeManager
 from escalation.engine import EscalationEngine
 
 OPENWA_URL = os.environ.get("OPENWA_URL", "http://localhost:3000")
@@ -18,11 +19,13 @@ def create_app(
     greeter: PatientGreeter | None = None,
     faq: FAQ | None = None,
     escalation: EscalationEngine | None = None,
+    intake_mgr: IntakeManager | None = None,
 ) -> FastAPI:
     store = store or PatientStore()
     greeter = greeter or PatientGreeter(store)
     faq = faq or FAQ()
     escalation = escalation or EscalationEngine()
+    intake_mgr = intake_mgr or IntakeManager()
 
     app = FastAPI(title="Hermes Gateway — Pilot")
 
@@ -38,6 +41,7 @@ def create_app(
             "faq_topics": len(faq.ANSWERS),
             "pending_escalations": escalation.pending_count,
             "total_conversations": conv_count,
+            "active_intakes": intake_mgr.active_count(),
         }
 
     @app.post("/webhook")
@@ -55,20 +59,39 @@ def create_app(
         # Record the conversation
         store.add_conversation(phone, body)
 
+        # Route through active intake if one exists
+        if intake_mgr.has_active(phone):
+            intake_state = intake_mgr.handle_message(phone, body)
+            if intake_state is not None:
+                success = await send_message(
+                    to=phone, body=intake_state["prompt"], openwa_url=OPENWA_URL
+                )
+                if success:
+                    return {"status": "ok"}
+                return JSONResponse(
+                    status_code=502, content={"detail": "Failed to send via OpenWA"}
+                )
+
         # Greet with identity verification
         verification = greeter.greet_with_verification(phone, body)
         greeting = verification["greeting"]
 
-        faq_answer = faq.ask(body)
-
-        if faq_answer is not None:
-            response_text = f"{greeting}\n\n{faq_answer}"
+        # Check if this is a new patient inquiry → start intake
+        topic = faq._classify(body)
+        if topic == "new_patient":
+            lang = faq._detect_language(body)
+            intake_state = intake_mgr.start_intake(phone, lang)
+            response_text = f"{greeting}\n\n{intake_state['prompt']}"
         else:
-            esc = escalation.escalate(phone, name, body)
-            response_text = (
-                f"{greeting}\n\nI've sent your question to our team. "
-                f"They'll get back to you within 24 hours."
-            )
+            faq_answer = faq.ask(body)
+            if faq_answer is not None:
+                response_text = f"{greeting}\n\n{faq_answer}"
+            else:
+                esc = escalation.escalate(phone, name, body)
+                response_text = (
+                    f"{greeting}\n\nI've sent your question to our team. "
+                    f"They'll get back to you within 24 hours."
+                )
 
         success = await send_message(to=phone, body=response_text, openwa_url=OPENWA_URL)
         if success:
